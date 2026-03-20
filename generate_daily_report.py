@@ -25,7 +25,7 @@ matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei']
 matplotlib.rcParams['axes.unicode_minus'] = False
 
 # ── 1. 配置 ──────────────────────────────────────────────────
-# 数据库连接：优先读取环境变量，也可在此处直接填写
+# 数据库连接：优先读取环境变量，也可在此处直接填写（注意脱敏）
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -64,8 +64,8 @@ LAST_WEEK  = YESTERDAY - datetime.timedelta(days=7)
 # ── 2. 辅助函数 ───────────────────────────────────────────────
 
 def to_wan(val):
-    """转换为万，保留两位小数"""
-    return f"{val / 10000:.2f}"
+    """转换为万字符串，四舍五入保留两位小数"""
+    return f"{val / 10000:.2f}万"
 
 
 def to_pct(val):
@@ -114,7 +114,7 @@ def generate_chart(data, output_path):
     # 柱子上标注：增幅 + 昨日使用次数
     for bar, pct, val in zip(bars, pct_vals, y_vals):
         height = bar.get_height()
-        label_text = f"{pct*100:+.1f}%\n{int(val):,}次"
+        label_text = f"{pct*100:+.2f}%\n{int(val):,}次"
         ax.text(bar.get_x() + bar.get_width()/2, height,
                 label_text,
                 ha='center', va='bottom', fontsize=9,
@@ -225,10 +225,10 @@ def build_document(data):
 
     text1 = (
         f"{YESTERDAY.year}年{YESTERDAY.month}月{YESTERDAY.day}日，"
-        f"当日活跃用户{to_wan(data['y_dau'])}万，增幅{to_pct(data['dau_growth'])}，"
-        f"当日核心功能服务{to_wan(data['y_core_sum'])}万人次，"
+        f"当日活跃用户{to_wan(data['y_dau'])}，增幅{to_pct(data['dau_growth'])}，"
+        f"当日核心功能服务{to_wan(data['y_core_sum'])}人次，"
         f"当日新增注册用户数{data['y_new_reg']}人，"
-        f"累计注册总用户数{to_wan(data['y_total_reg'])}万人。"
+        f"累计注册总用户数{to_wan(data['y_total_reg'])}人。"
     )
     r1 = p1.add_run(text1)
     set_run_font(r1, '仿宋', 16)
@@ -265,9 +265,9 @@ def main():
         print(f"数据获取失败: {e}")
         raise
 
-    print(f"  平台DAU:   {to_wan(data['y_dau'])}万  周同比增幅: {to_pct(data['dau_growth'])}")
-    print(f"  核心服务:  {to_wan(data['y_core_sum'])}万人次")
-    print(f"  新增注册:  {data['y_new_reg']}人    累计注册: {to_wan(data['y_total_reg'])}万人")
+    print(f"  平台DAU:   {to_wan(data['y_dau'])}  周同比增幅: {to_pct(data['dau_growth'])}")
+    print(f"  核心服务:  {to_wan(data['y_core_sum'])}人次")
+    print(f"  新增注册:  {data['y_new_reg']}人    累计注册: {to_wan(data['y_total_reg'])}人")
     print(f"  增幅前5:   {list(data['top5'].index)}")
 
     doc = build_document(data)
