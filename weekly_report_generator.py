@@ -36,7 +36,7 @@ matplotlib.rcParams['axes.unicode_minus'] = False
 
 
 # ─────────────────────────────────────────
-# 数据库配置
+# 数据库配置（已脱敏，通过环境变量读取）
 # ─────────────────────────────────────────
 try:
     from dotenv import load_dotenv
@@ -189,12 +189,12 @@ def query_search_total_by_keyword(cursor, start: date, end: date):
 # ─────────────────────────────────────────
 # 数据分析
 # ─────────────────────────────────────────
-def build_platform_decline_text(cur_dau: dict, prev_dau: dict) -> str:
+def build_platform_change_text(cur_dau: dict, prev_dau: dict) -> str:
     """
     分析各端日活变化，生成平台备注文字。
-    - 有端口下降：列出所有下降端，含均值、环比降幅、日均减少量
-    - 所有端口均下降：只列降幅最大（日均减少最多）的两个端
-    - 全部上升：保持原简洁格式
+    - 全部上升：列出增幅最大的两个端，含均值、环比增幅、日均增加量
+    - 部分下降：列出所有下降端，含均值、环比降幅、日均减少量
+    - 所有端口均下降：列出降幅最大（日均减少最多）的两个端
     """
     platforms = [
         ('APP（安卓+苹果+鸿蒙）', 'app_avg'),
@@ -210,40 +210,41 @@ def build_platform_decline_text(cur_dau: dict, prev_dau: dict) -> str:
         if prev_val == 0:
             continue
         pct         = (cur_val - prev_val) / prev_val * 100
-        daily_delta = cur_val - prev_val          # 负数表示下降
+        daily_delta = cur_val - prev_val
         if pct < 0:
             decline.append((label, cur_val, pct, daily_delta))
         else:
             rise.append((label, cur_val, pct, daily_delta))
 
-    # 全部上升 → 原格式
     if not decline:
-        return (
-            f"本周期APP日活均值{fmt_wan(cur_dau['app_avg'])}（安卓+苹果+鸿蒙），"
-            f"支付宝小程序日活均值{fmt_wan(cur_dau['alipay_avg'])}。"
-        )
-
-    # 所有端口均下降 → 只取日均减少量最多的两个（daily_delta 最负）
-    if not rise:
-        show = sorted(decline, key=lambda x: x[3])[:2]   # 最负的两个
+        # 全部上升 -> 取日均增加量最多的两个（daily_delta 正数且最大）
+        show = sorted(rise, key=lambda x: x[3], reverse=True)[:2]
+        prefix = "本周期各端日活均有所上升，"
+        direction, verb = "上升", "增加"
+    elif not rise:
+        # 所有端口均下降 -> 只取日均减少量最多的两个（daily_delta 负数且最小）
+        show = sorted(decline, key=lambda x: x[3])[:2]
         prefix = "本周期各端日活均有所下降，"
+        direction, verb = "下降", "减少"
     else:
-        show   = sorted(decline, key=lambda x: x[3])     # 全部下降端
+        # 混合情况 -> 优先列出所有下降端
+        show = sorted(decline, key=lambda x: x[3])
         prefix = ""
+        direction, verb = "下降", "减少"
 
     parts = []
     for label, cur_val, pct, daily_delta in show:
         parts.append(
             f"{label}日活均值{fmt_wan(cur_val)}，"
-            f"环比下降{abs_pct_str(pct)}，"
-            f"日均减少{fmt_wan(abs(daily_delta))}"
+            f"环比{direction}{abs_pct_str(pct)}，"
+            f"日均{verb}{fmt_wan(abs(daily_delta))}"
         )
     return prefix + "；".join(parts) + "。"
 
 
 def analyze_dau_trend(daily_data) -> str:
     """
-    根据每日 platform_dau 数据描述走势（含社治e管家+1万）。
+    根据每日 platform_dau 数据描述走势（含社区保障e管家+1.00万）。
     只描述走势形态与峰谷，不分析原因。
     """
     if not daily_data:
@@ -292,7 +293,7 @@ def generate_dau_chart(
     prev_start: date, prev_end: date,
 ) -> str:
     """
-    生成本周期与上周期日活折线对比图（含社治e管家+1万）。
+    生成本周期与上周期日活折线对比图（含社区保障e管家+1.00万）。
     返回保存的临时图片路径。
     """
     cur_vals  = [(int(v) + 10000) / 10000 for _, v in cur_daily]
@@ -537,7 +538,7 @@ def generate_report(anchor: date = None):
 
     dau_text_main = (
         f"{cur_period_str}：日活均值{total_avg_str}"
-        f"（{platform_avg_str}+社区保障e管家约1万日活），"
+        f"（{platform_avg_str}+社区保障e管家约1.00万日活），"
         f"环比上周期（{prev_period_str}）不含社区保障e管家"
         f"{change_direction(platform_pct)}{abs_pct_str(platform_pct)}。"
     )
@@ -548,7 +549,7 @@ def generate_report(anchor: date = None):
         f"{change_direction(svc_pct)}{abs_pct_str(svc_pct)}。"
     )
 
-    platform_note = build_platform_decline_text(cur_dau, prev_dau)
+    platform_note = build_platform_change_text(cur_dau, prev_dau)
     trend_text    = analyze_dau_trend(cur_daily_dau)
     chart_path    = generate_dau_chart(
         cur_daily_dau, prev_daily_dau,
@@ -598,10 +599,10 @@ def generate_report(anchor: date = None):
     add_para(doc, dau_text_main)
     add_blank_para(doc, "（主要原因分析，请人工填写）")
 
-    # 各端日活变化备注（①优化点：下降时列出下降端详情）
+    # 各端日活变化备注
     add_para(doc, platform_note)
 
-    # 2. 日活本周期趋势（②优化点：自动描述走势 + 折线图）
+    # 2. 日活本周期趋势
     add_para(doc, "2.日活本周期趋势：", bold=True, first_line_indent=False)
     add_para(doc, trend_text)
 
