@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cp:*)"
+      "Bash(cp:*)",
+      "Bash(C:/Users/TAOYUAN/PycharmProjects/pythonProject2/venv311/Scripts/python.exe -c \"import ast; ast.parse\\(open\\('C:/Users/TAOYUAN/PycharmProjects/auto_report/report_engine.py', encoding='utf-8'\\).read\\(\\)\\); print\\('语法检查通过'\\)\")"
     ]
   }
 }

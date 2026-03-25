@@ -1,25 +1,31 @@
 # 报告模板目录使用说明
 
-## 目录结构
+## 两种使用方式
 
-```
-templates/
-    my_report.docx      ← Word 模板（用 {{变量名}} 标记占位符）
-    my_report.json      ← 字段配置（与模板同名，扩展名换 .json）
-    daily_report.json   ← 工作日报配置示例
-    weekly_report.json  ← 周报配置示例
-```
+### 方式一：傻瓜模式（推荐，无需写 SQL）
 
-## 制作模板
+1. 把 Word 模板（`.docx`）放入本目录，在需要填数据的位置写 `{{变量名}}`
+2. 运行扫描命令，自动生成 CSV 配置骨架：
+   ```bash
+   python report_engine.py --scan templates/my_report.docx
+   ```
+3. 用 **Excel** 打开生成的 `my_report.csv`，在 `数据库字段` 列填写字段名：
 
-1. 新建或复制一个 Word 文档
-2. 在需要填入数据的位置写 `{{变量名}}`，例如：
+   | 占位符 | 数据库字段 | 格式 | 固定值 | 备注 |
+   |--------|-----------|------|--------|------|
+   | platform_dau | platform_daily_metrics.platform_dau | 万 | | 平台日活 |
+   | dau_growth | platform_daily_metrics.dau_growth | 百分比 | | 日活增幅 |
+   | report_date | | 日期 | | 自动填昨日日期 |
+   | custom_text | | | 这是固定文字 | 固定内容 |
 
-   > 当日活跃用户 **{{platform_dau}}** 万，增幅 {{dau_growth}}
+4. 保存 CSV，运行引擎：
+   ```bash
+   python report_engine.py
+   ```
 
-3. 保存为 `.docx`，放入本目录
+---
 
-## 编写配置文件
+### 方式二：高级模式（JSON 配置，支持自定义 SQL）
 
 与模板同名，扩展名改为 `.json`：
 
@@ -42,41 +48,53 @@ templates/
 }
 ```
 
-## 变量类型（type）
+---
 
-| type | 说明 |
+## CSV 列说明
+
+| 列名 | 说明 |
 |------|------|
-| `sql` | 执行 SQL，取第一行第一列 |
-| `date` | 内置日期（`today` / `yesterday` / `last_week`） |
-| `literal` | 固定文字 |
+| 占位符 | 对应模板里的 `{{变量名}}` |
+| 数据库字段 | `表名.字段名`（如 `platform_daily_metrics.platform_dau`）；或只填字段名（系统自动找表） |
+| 格式 | 见下表 |
+| 固定值 | 若填写则直接使用该文字，不查数据库 |
+| 备注 | 仅供人工阅读，引擎忽略 |
 
-## 格式化（format）
+## 格式选项
 
-| format | 效果 |
+| 格式 | 效果 |
+|------|------|
+| `万` | `123456` → `12.35万` |
+| `百分比` | `0.0523` → `+5.23%` |
+| `整数` | `123456` → `123,456` |
+| `日期` | `2026-03-18` → `3月18日` |
+| `原始` | 原始值（默认） |
+
+> 也支持英文格式名：`wan` / `pct` / `int` / `date_cn` / `raw`
+
+## 内置日期变量
+
+以下占位符无需填写数据库字段，系统自动处理：
+
+| 占位符 | 说明 |
 |--------|------|
-| `wan` | `123456` → `12.35万` |
-| `pct` | `0.0523` → `+5.23%` |
-| `int` | `123456` → `123,456` |
-| `date_cn` | `2026-03-18` → `3月18日` |
-| `raw` | 原始值（默认） |
+| `{{yesterday}}` | 昨日（YYYY-MM-DD） |
+| `{{today}}` | 今日 |
+| `{{last_week}}` | 上周同日 |
+| `{{date}}` | 当前时间戳（用于文件名） |
 
-## SQL 中的内置变量
-
-| 变量 | 说明 |
-|------|------|
-| `{yesterday}` | 昨日（YYYY-MM-DD） |
-| `{today}` | 今日 |
-| `{last_week}` | 上周同日 |
-
-## 运行
+## 运行命令
 
 ```bash
-# 生成单个报告
+# 第一步：扫描模板，生成 CSV 骨架
+python report_engine.py --scan templates/my_report.docx
+
+# 第二步：生成报告（自动识别同名 .csv 或 .json）
 python report_engine.py --template templates/my_report.docx
 
 # 批量生成模板目录中所有报告
 python report_engine.py
 
-# 列出可用模板
+# 列出可用模板及配置状态
 python report_engine.py --list
 ```
