@@ -58,10 +58,15 @@ def _builtin_dates():
     yesterday = today - datetime.timedelta(days=1)
     last_week = yesterday - datetime.timedelta(days=7)
     return {
-        'today':     str(today),
-        'yesterday': str(yesterday),
-        'last_week': str(last_week),
-        'date':      datetime.datetime.now().strftime('%Y%m%d_%H%M%S'),
+        'today':          str(today),
+        'yesterday':      str(yesterday),
+        'last_week':      str(last_week),
+        'date':           datetime.datetime.now().strftime('%Y%m%d_%H%M%S'),
+        # 中文格式（直接在模板中使用，无需 CSV 配置）
+        'yesterday_md':  f'{yesterday.month}月{yesterday.day}日',
+        'yesterday_ymd': f'{yesterday.year}年{yesterday.month}月{yesterday.day}日',
+        'today_md':      f'{today.month}月{today.day}日',
+        'today_ymd':     f'{today.year}年{today.month}月{today.day}日',
     }
 
 
@@ -151,7 +156,10 @@ def resolve_variables(config: dict, conn) -> dict:
 _PLACEHOLDER_RE = re.compile(r'\{\{(\w+)\}\}')
 
 # 引擎内置的日期变量（无需用户配置 SQL）
-_BUILTIN_DATE_KEYS = {'today', 'yesterday', 'last_week', 'date'}
+_BUILTIN_DATE_KEYS = {
+    'today', 'yesterday', 'last_week', 'date',
+    'yesterday_md', 'yesterday_ymd', 'today_md', 'today_ymd',
+}
 
 
 def scan_placeholders(docx_path: str) -> list:
@@ -260,9 +268,12 @@ def _normalize_fmt(fmt_str: str) -> str:
 def _field_to_sql(field: str) -> str:
     """
     将 '表名.字段名' 或 '字段名' 转为 SELECT 语句。
+    若字段值以 SELECT 开头，视为完整 SQL 直接透传（供开发者预填复杂计算）。
     日期过滤默认取昨日（stat_date = '{yesterday}'）。
     """
     field = field.strip()
+    if field.upper().startswith('SELECT'):
+        return field  # 完整 SQL，直接透传
     if '.' in field:
         table, col = field.split('.', 1)
         return f"SELECT {col.strip()} FROM {table.strip()} WHERE stat_date = '{{yesterday}}'"
@@ -459,9 +470,9 @@ def main():
             cfg = _find_config(os.path.join(tdir, f))
             if cfg:
                 cfg_type = '(CSV)' if cfg.lower().endswith('.csv') else '(JSON)'
-                pairs.append((f, f'✓ {cfg_type}'))
+                pairs.append((f, f'[OK] {cfg_type}'))
             else:
-                pairs.append((f, '✗ (缺少 .csv 或 .json 配置)'))
+                pairs.append((f, '[--] (缺少 .csv 或 .json 配置)'))
         if not pairs:
             print(f'模板目录 {tdir} 中没有找到 .docx 文件')
         else:
