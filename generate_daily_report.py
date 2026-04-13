@@ -9,6 +9,7 @@ generate_daily_report.py
 """
 
 import os
+import sys
 import datetime
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -20,36 +21,34 @@ from docx.oxml import OxmlElement
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from sqlalchemy import create_engine
 
+# 设置输出编码
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
 # 设置 matplotlib 中文字体
 matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei']
 matplotlib.rcParams['axes.unicode_minus'] = False
 
-# ── 1. 配置 ──────────────────────────────────────────────────
-# 数据库连接：优先读取环境变量，也可在此处直接填写（注意脱敏）
+# ── 1. 配置加载 ─────────────────────────────────────────────
 try:
-    from dotenv import load_dotenv
-    load_dotenv()
+    from config import (
+        DB_CONFIG,
+        SERVICE_MAPPING_PATH,
+        REPORT_OUTPUT_DIR as OUTPUT_DIR,
+    )
 except ImportError:
-    pass
+    DB_CONFIG = {
+        'host': 'localhost',
+        'port': 3306,
+        'user': 'root',
+        'password': '更换为自己的MySQL密码',
+        'database': 'daily',
+        'charset': 'utf8mb4'
+    }
+    SERVICE_MAPPING_PATH = os.path.join(os.path.dirname(__file__), "历史数据", "是否为服务.xlsx")
+    OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "报表产出")
 
-DB_CONFIG = {
-    'host':     os.getenv('DB_HOST',     'localhost'),
-    'port':     int(os.getenv('DB_PORT', '3306')),
-    'user':     os.getenv('DB_USER',     'root'),
-    'password': os.getenv('DB_PASSWORD', ''),
-    'database': os.getenv('DB_NAME',     'daily'),
-    'charset':  'utf8mb4'
-}
-
-# 路径：优先读取环境变量，默认指向本脚本同目录下的子目录
-SERVICE_MAPPING_PATH = os.getenv(
-    'SERVICE_MAPPING_PATH',
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), '历史数据', '是否为服务.xlsx')
-)
-OUTPUT_DIR = os.getenv(
-    'OUTPUT_DIR',
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), '报表产出')
-)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 engine = create_engine(
@@ -165,18 +164,18 @@ def get_report_data():
     y_core_sum = int(
         df_detail[
             (df_detail['stat_date'] == YESTERDAY) &
-            (df_detail['service_name'].isin(core_list))  # core_list 来自 是否为服务=1
+            (df_detail['service_name'].isin(core_list))
         ]['service_amount'].sum()
     )
     y_new_reg   = int(df_metrics.loc[YESTERDAY, 'new_register_users'])   if YESTERDAY in df_metrics.index else 0
     y_total_reg = int(df_metrics.loc[YESTERDAY, 'total_register_users']) if YESTERDAY in df_metrics.index else 0
 
-    # E. 增幅前5服务（仅限核心服务，昨日 > 100 且上周有数据）
+    # E. 增幅前5服务（仅限核心服务，昨日使用次数 > 100 且上周有数据）
     y_grp  = df_detail[df_detail['stat_date'] == YESTERDAY].set_index('service_name')['service_amount']
     lw_grp = df_detail[df_detail['stat_date'] == LAST_WEEK ].set_index('service_name')['service_amount']
 
     df_growth = pd.DataFrame({'yesterday': y_grp, 'lastweek': lw_grp}).fillna(0)
-    # 筛选：必须是核心服务 + 昨日>100 + 上周有数据
+    # 筛选条件：1. 属于核心服务； 2. 昨日总服务次数 > 100； 3. 上周同期有数据
     df_growth = df_growth[
         df_growth.index.isin(core_list) &
         (df_growth['yesterday'] > 100) &
